@@ -11,7 +11,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django_celery_results.models import TaskResult
 
-from api.models import Cart, Favorite
+from api.models import Cart, Command, Favorite
 
 
 T = TypeVar("T", str, dict, list, int, Any)
@@ -100,3 +100,16 @@ def get_all_cart(user_id: str):
         f"all_cart_{user_id}",
         {"type": "all.cart", "data": data},
     )
+
+
+@shared_task
+def add_order(order, suivis, products):
+    """
+
+    Args:
+        - order : order dict
+        - suivis : suivis dict
+        - products : products list
+    Return: None
+    """
+    Command.register_order(body=order, suivis=suivis, products=products)

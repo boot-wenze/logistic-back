@@ -17,4 +17,4 @@ def hash_password(password: str = None) -> str:
 def host():
     "Host"
     # return "http://localhost:8000/api/media/"
-    return "https://c0117f177fefb3c297af1ae370655a18.serveo.net/api/media/"
+    return "https://logistic.serveo.net/api/media/"

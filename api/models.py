@@ -111,7 +111,7 @@ class Agent(AbstractUser):
     poste = models.CharField(
         max_length=50, choices=Poste.choices, null=False, blank=False
     )
-    address = models.JSONField(default={})
+    address = models.JSONField(default=dict)
     salary = models.FloatField(default=0)
 
     currency = models.CharField(
@@ -191,8 +191,8 @@ class RemunerationMensuel(models.Model):
         null=False,
         blank=False,
     )
-    is_paid = models.BooleanField(default=True)
-    for_month = models.DateField(default=date.today())
+    is_paid = models.BooleanField(default=False)
+    for_month = models.DateField(auto_now_add=True)
     date_paid = models.DateTimeField(auto_now_add=True)
     motif = models.TextField(null=False, blank=False)
 
@@ -214,6 +214,7 @@ class Command(models.Model):
     client_fullname = models.CharField(max_length=255, null=False, blank=False)
     client_phone = models.CharField(max_length=20, null=True, blank=True)
     client_subscription_type = models.CharField(max_length=50, blank=False, null=False)
+    email = models.CharField(max_length=50, blank=True, null=True)
     # product_bought_category = models.CharField(
     #     max_length=50, choices=Type.choices, blank=False, null=False
     # )
@@ -233,10 +234,55 @@ class Command(models.Model):
         null=False,
         blank=False,
     )
-    date_prevu_livraison = models.DateTimeField()
-    address_livraison = models.JSONField(default={})
+    date_prevu_livraison = models.DateTimeField(null=True, blank=True)
+    address_livraison = models.JSONField(default=dict)
     code_secret = models.CharField(max_length=7, null=False, blank=False)
     is_delivered = models.BooleanField(default=False)
+
+    @classmethod
+    def get_all_command(cls, user_id: str):
+
+        orders = list(cls.objects.filter(client_id=user_id))
+
+        return orders
+
+    @classmethod
+    def get_order_id(cls, order: str = None):
+        try:
+            return cls.objects.get(command_id=order)
+        except cls.DoesNotExist:
+            return None
+
+    @classmethod
+    def generate_order_id(cls):
+        order_id = secrets.token_hex(8)
+
+        is_id_exist = cls.get_order_id(order_id)
+
+        if is_id_exist is None:
+            return order_id
+        else:
+            cls.generate_order_id()
+
+    @classmethod
+    def register_order(cls, body, suivis, products):
+
+        my_order_id = cls.generate_order_id()
+        body["command_id"] = my_order_id
+        suivis["command_id"] = my_order_id
+
+        for product in products:
+            product["command_id"] = my_order_id
+
+        body["code_secret"] = random.randint(1111111, 9999999)
+
+        Product.add_order_product(products)
+
+        Suivis.add_suivis(suivis)
+
+        cls.objects.create(**body)
+
+        return {"succeed": True}
 
 
 class Suivis(models.Model):
@@ -244,6 +290,21 @@ class Suivis(models.Model):
     client_id = models.CharField(max_length=50, blank=True, null=True)
     command_id = models.CharField(max_length=200, unique=True, blank=False, null=False)
     status = models.IntegerField(default=25)
+
+    @classmethod
+    def get_all_command(cls, user_id: str):
+
+        orders = list(cls.objects.values().filter(client_id=user_id).order_by("-id"))
+
+        return orders
+
+    @classmethod
+    def add_suivis(cls, body):
+        cls.objects.create(**body)
+
+    @classmethod
+    def update_suivis(cls, order_id, status):
+        cls.objects.filter(command_id=order_id).update(status=status)
 
 
 class Favorite(models.Model):
@@ -299,7 +360,7 @@ class Cart(models.Model):
     branch_id = models.CharField(max_length=200, blank=True, null=True)
     photo_id = models.CharField(max_length=200, blank=True, null=True)
     client_id = models.CharField(max_length=200, blank=True, null=True)
-    number = models.IntegerField(max_length=4, blank=False, null=False, default=1)
+    number = models.IntegerField(blank=False, null=False, default=1)
     detail = ArrayField(models.CharField(), blank=True, null=True)
 
     # product_cart_category = models.CharField(
@@ -326,6 +387,10 @@ class Cart(models.Model):
         )
 
         return carts
+
+    @classmethod
+    def remove_cart(cls, product_id: str, photo_id: str):
+        cls.objects.get(product_id=product_id, photo_id=photo_id).delete()
 
     @classmethod
     def add_remove_cart(cls, data: dict):
@@ -376,11 +441,13 @@ class Product(models.Model):
         USD = "USD", "USD"
         FC = "FC", "FC"
 
-    command_id = models.CharField(max_length=200, unique=True, blank=False, null=False)
+    command_id = models.CharField(max_length=200, blank=False, null=False)
     b_id = models.CharField(max_length=150, blank=True, null=True)
     branch_id = models.CharField(max_length=150, blank=True, null=True)
-    photo_id = models.CharField(max_length=50, blank=True, null=True)
-    nom_produit = models.CharField(max_length=200, unique=True, blank=False, null=False)
+    photo = models.CharField(max_length=150, blank=True, null=True)
+    photo_id = models.CharField(max_length=500, blank=True, null=True)
+    product_id = models.CharField(max_length=250, blank=True, null=True)
+    nom_produit = models.CharField(max_length=200, blank=False, null=False)
     client_subscription_type = models.CharField(max_length=50, blank=False, null=False)
     number_articles = models.IntegerField()
     price = models.FloatField()
@@ -391,9 +458,28 @@ class Product(models.Model):
         blank=False,
     )
     description = models.TextField()
-    command_date = models.DateTimeField()
-    date_prevu_livraison = models.DateTimeField()
+    command_date = models.DateTimeField(auto_now_add=True)
+    date_prevu_livraison = models.DateTimeField(blank=True, null=True)
     has_discount = models.BooleanField(default=False)
     discount_percentage = models.IntegerField(default=0)
     cout_total = models.FloatField()
     validated_by_user = models.CharField(max_length=150, blank=True, null=True)
+
+    @classmethod
+    def filter_order(cls, command_id: str):
+        orders = list(cls.objects.values().filter(command_id=command_id))
+        return orders
+
+    @classmethod
+    def add_order_product(cls, data):
+
+        datas = [Product(**element) for element in data]
+
+        cls.objects.bulk_create(datas)
+
+        for product in data:
+            Cart.remove_cart(product["product_id"], product["photo_id"])
+
+    @classmethod
+    def finalize_order_product(cls, by_user: str, order_id: str):
+        cls.objects.filter(command_id=order_id).update(validated_by_user=by_user)

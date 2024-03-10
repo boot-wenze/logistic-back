@@ -27,4 +27,8 @@ from django.urls import path
 
 from api import views
 
-urlpatterns = [path("home", views.home, name="home")]
+urlpatterns = [
+    path("home", views.home, name="home"),
+    path("order", views.order, name="order"),
+    path("get_all_orders/<str:client_id>", views.get_all_orders, name="get_all_orders"),
+]
