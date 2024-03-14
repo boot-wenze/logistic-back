@@ -11,7 +11,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django_celery_results.models import TaskResult
 
-from api.models import Cart, Command, Favorite
+from api.models import Cart, Command, Favorite, Product
 
 
 T = TypeVar("T", str, dict, list, int, Any)
@@ -113,3 +113,32 @@ def add_order(order, suivis, products):
     Return: None
     """
     Command.register_order(body=order, suivis=suivis, products=products)
+
+
+@shared_task
+def business_order(b_id: str, branch_id: str):
+    """
+
+    Args:
+        - b_id : business ID
+        - branch_id : branch ID
+    Return: list of orders
+    """
+    data = Product.get_product_by_bness_id(b_id, branch_id)
+
+    async_to_sync(channel_layer.group_send)(
+        f"business_{b_id}_{branch_id}", {"type": "all.orders", "data": data}
+    )
+
+
+@shared_task
+def update_order(data, status):
+    """branch updating order status
+
+    Keyword arguments:
+        - data : necessary data info
+        - status: new order status
+    Return:
+    """
+
+    Product.update_status(data, status)

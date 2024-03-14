@@ -36,7 +36,7 @@ from django.contrib.postgres.fields import ArrayField
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
 
-from api.utils.utils import hash_password, host
+from api.utils.utils import bness_host, hash_password, host
 
 # Create your models here.
 T = TypeVar("T", str, int, list, dict)
@@ -289,7 +289,7 @@ class Suivis(models.Model):
 
     client_id = models.CharField(max_length=50, blank=True, null=True)
     command_id = models.CharField(max_length=200, unique=True, blank=False, null=False)
-    status = models.IntegerField(default=25)
+    status = models.IntegerField(default=0)
 
     @classmethod
     def get_all_command(cls, user_id: str):
@@ -464,6 +464,31 @@ class Product(models.Model):
     discount_percentage = models.IntegerField(default=0)
     cout_total = models.FloatField()
     validated_by_user = models.CharField(max_length=150, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    orderType = models.CharField(max_length=50, blank=True, null=True, default="Normal")
+
+    @classmethod
+    def get_product_by_bness_id(cls, bness_id: str, branch_id: str):
+
+        orders = (
+            cls.objects.values()
+            .filter(b_id=bness_id, branch_id=branch_id)
+            .order_by("-id")
+        )
+
+        for order in orders:
+            if order["status"] < 0:
+                order["status"] = "Annuler"
+            elif order["status"] == 0:
+                order["status"] = "En attente"
+            else:
+                order["status"] = "Complet"
+            order["command_date"] = str(order["command_date"])
+            order["date_prevu_livraison"] = str(order["date_prevu_livraison"])
+            order["photo"] = str(order["photo"]).split("/api/media/")[1]
+            order["photo"] = bness_host() + order["photo"]
+
+        return list(orders)
 
     @classmethod
     def filter_order(cls, command_id: str):
@@ -483,3 +508,25 @@ class Product(models.Model):
     @classmethod
     def finalize_order_product(cls, by_user: str, order_id: str):
         cls.objects.filter(command_id=order_id).update(validated_by_user=by_user)
+
+    @classmethod
+    def update_status(cls, data, status):
+        cls.objects.filter(**data).update(status=status)
+
+        time.sleep(1)
+
+        get_all = cls.objects.filter(command_id=data["command_id"])
+
+        divider = get_all.count()
+
+        total = 0
+
+        for i in get_all:
+            total += i.status
+
+        if (total / divider) == 1:
+            Suivis.update_suivis(data["command_id"], 1)
+        else:
+            Suivis.update_suivis(data["command_id"], 0)
+
+        return {"succeed": True}

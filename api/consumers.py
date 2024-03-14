@@ -22,6 +22,7 @@ from api.tasks import (
     get_all_cart,
     get_cart,
     get_favorites,
+    business_order,
 )
 
 
@@ -134,6 +135,34 @@ class CartById(WebsocketConsumer):
         )
 
     def cart_by_id(self, event):
+        message = event["data"]
+        # Send message to WebSocket
+
+        self.send(text_data=json.dumps({"data": message}))
+
+
+class BusinessOrder(WebsocketConsumer):
+    """Item consumer websocket"""
+
+    def connect(self):
+        self.bness_id = self.scope["url_route"]["kwargs"]["b_id"]
+        self.branch_id = self.scope["url_route"]["kwargs"]["branch_id"]
+        self.branch_group = f"business_{self.bness_id}_{self.branch_id}"
+
+        # Join branch group
+        async_to_sync(self.channel_layer.group_add)(
+            self.branch_group, self.channel_name
+        )
+        self.accept()
+
+        business_order.delay(self.bness_id, self.branch_id)
+
+    def disconnect(self, code):
+        async_to_sync(self.channel_layer.group_discard)(
+            self.branch_group, self.channel_name
+        )
+
+    def all_orders(self, event):
         message = event["data"]
         # Send message to WebSocket
 

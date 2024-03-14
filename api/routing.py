@@ -32,4 +32,8 @@ ws_urlpatterns = [
         "ws/getAllCart/<str:user_id>",
         consumers.GetAllCart.as_asgi(),
     ),
+    path(
+        "ws/getOrders/<str:b_id>/<str:branch_id>",
+        consumers.BusinessOrder.as_asgi(),
+    ),
 ]

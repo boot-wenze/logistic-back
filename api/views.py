@@ -16,7 +16,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from api.models import Command, Product, Suivis
 
-from api.tasks import add_order
+from api.tasks import add_order, update_order
 
 # Create your views here.
 
@@ -53,6 +53,21 @@ def get_all_orders(request, client_id: str = None):
 @permission_classes(())
 def order(request):
     """Order view"""
+    if request.method == "PUT":
+
+        body = request.data
+
+        mystatus = body["status"]
+
+        del body["status"]
+
+        product = update_order.delay(body, mystatus)
+
+        return Response(
+            {"suceed": True, "id": product.task_id},
+            status=status.HTTP_200_OK,
+        )
+
     if request.method == "POST":
 
         body = request.data
@@ -102,6 +117,7 @@ def order(request):
                     "has_discount": element["has_discount"],
                     "discount_percentage": element["discount_percentage"],
                     "cout_total": element["cout_total"],
+                    "orderType": element["subscriptionType"],
                 }
             )
 
